@@ -86,9 +86,9 @@ jobs:
         if: steps.check-release.outputs.exists == 'false'
         run: |
           cd OpenCore-DEBUG
-          zip -qr ../OpenCore-${{ steps.fetch-latest.outputs.version }}-DEBUG-Signed.zip *
+          zip -qr ../OpenCore-${{ steps.fetch-latest.outputs.version }}-DEBUG.zip *
           cd ../OpenCore-RELEASE
-          zip -qr ../OpenCore-${{ steps.fetch-latest.outputs.version }}-RELEASE-Signed.zip *
+          zip -qr ../OpenCore-${{ steps.fetch-latest.outputs.version }}-RELEASE.zip *
           cd ..
 
       - name: Create Release
@@ -97,9 +97,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${{ steps.fetch-latest.outputs.release_tag }}" \
-            --title "OpenCore ${{ steps.fetch-latest.outputs.version }} (${{ steps.fetch-latest.outputs.short_sha }}) - Signed" \
+            --title "OpenCore ${{ steps.fetch-latest.outputs.version }} (${{ steps.fetch-latest.outputs.short_sha }})" \
             --notes "Automated signed release for OpenCorePkg commit ${{ steps.fetch-latest.outputs.sha }}" \
-            OpenCore-*-Signed.zip
+            OpenCore-*.zip
 
       - name: Ensure security (clean up keys)
         if: always()
