@@ -1,0 +1,107 @@
+name: Auto-Sign OpenCore
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Check every hour
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  check-and-sign:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to create a release
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sbsigntool jq unzip zip
+
+      - name: Fetch latest.json
+        id: fetch-latest
+        run: |
+          JSON=$(curl -s https://raw.githubusercontent.com/dortania/build-repo/builds/latest.json)
+          VERSION=$(echo "$JSON" | jq -r '.OpenCorePkg.versions[0].version')
+          SHA=$(echo "$JSON" | jq -r '.OpenCorePkg.versions[0].commit.sha')
+          SHORT_SHA=${SHA:0:7}
+          DEBUG_URL=$(echo "$JSON" | jq -r '.OpenCorePkg.versions[0].links.debug')
+          RELEASE_URL=$(echo "$JSON" | jq -r '.OpenCorePkg.versions[0].links.release')
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "debug_url=$DEBUG_URL" >> $GITHUB_OUTPUT
+          echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
+          echo "release_tag=OpenCore-${VERSION}-${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Check if release already exists
+        id: check-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.fetch-latest.outputs.release_tag }}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists. Skipping."
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Release $TAG does not exist. Proceeding."
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Keys
+        if: steps.check-release.outputs.exists == 'false'
+        run: |
+          echo "${{ secrets.ISK_KEY }}" > ISK.key
+          echo "${{ secrets.ISK_PEM }}" > ISK.pem
+
+      - name: Download & Extract
+        if: steps.check-release.outputs.exists == 'false'
+        run: |
+          wget -q "${{ steps.fetch-latest.outputs.debug_url }}" -O debug.zip
+          wget -q "${{ steps.fetch-latest.outputs.release_url }}" -O release.zip
+          
+          unzip -q debug.zip -d OpenCore-DEBUG
+          unzip -q release.zip -d OpenCore-RELEASE
+
+      - name: Sign EFI files
+        if: steps.check-release.outputs.exists == 'false'
+        run: |
+          chmod +x sign_local_efi.sh
+          
+          # Sign DEBUG
+          echo "Signing DEBUG..."
+          ./sign_local_efi.sh OpenCore-DEBUG/X64
+          cp -r Signed/OpenCore-DEBUG/* OpenCore-DEBUG/
+          rm -rf Signed
+          
+          # Sign RELEASE
+          echo "Signing RELEASE..."
+          ./sign_local_efi.sh OpenCore-RELEASE/X64
+          cp -r Signed/OpenCore-RELEASE/* OpenCore-RELEASE/
+          rm -rf Signed
+
+      - name: Repackage
+        if: steps.check-release.outputs.exists == 'false'
+        run: |
+          cd OpenCore-DEBUG
+          zip -qr ../OpenCore-${{ steps.fetch-latest.outputs.version }}-DEBUG-Signed.zip *
+          cd ../OpenCore-RELEASE
+          zip -qr ../OpenCore-${{ steps.fetch-latest.outputs.version }}-RELEASE-Signed.zip *
+          cd ..
+
+      - name: Create Release
+        if: steps.check-release.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.fetch-latest.outputs.release_tag }}" \
+            --title "OpenCore ${{ steps.fetch-latest.outputs.version }} (${{ steps.fetch-latest.outputs.short_sha }}) - Signed" \
+            --notes "Automated signed release for OpenCorePkg commit ${{ steps.fetch-latest.outputs.sha }}" \
+            OpenCore-*-Signed.zip
+
+      - name: Ensure security (clean up keys)
+        if: always()
+        run: |
+          rm -f ISK.key ISK.pem
