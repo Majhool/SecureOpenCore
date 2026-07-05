@@ -82,6 +82,67 @@ jobs:
           cp -r Signed/OpenCore-RELEASE/* OpenCore-RELEASE/
           rm -rf Signed
 
+      - name: Handle HfsPlus.efi
+        if: steps.check-release.outputs.exists == 'false'
+        run: |
+          # Download HfsPlus.efi
+          echo "Downloading HfsPlus.efi..."
+          mkdir -p HfsPlus-temp
+          cd HfsPlus-temp
+          wget -q "https://raw.githubusercontent.com/acidanthera/OcBinaryData/master/Drivers/HfsPlus.efi" -O HfsPlus.efi
+          
+          # Check if file was downloaded successfully
+          if [ ! -f HfsPlus.efi ]; then
+            echo "Failed to download HfsPlus.efi"
+            exit 1
+          fi
+          
+          # Calculate checksum of downloaded file
+          NEW_CHECKSUM=$(sha256sum HfsPlus.efi | awk '{print $1}')
+          echo "Downloaded HfsPlus.efi checksum: $NEW_CHECKSUM"
+          
+          # Check if Drivers directory exists and if HfsPlus.efi already exists
+          IS_NEW=true
+          if [ -f "../OpenCore-DEBUG/X64/Drivers/HfsPlus.efi" ]; then
+            EXISTING_CHECKSUM=$(sha256sum ../OpenCore-DEBUG/X64/Drivers/HfsPlus.efi | awk '{print $1}')
+            if [ "$NEW_CHECKSUM" = "$EXISTING_CHECKSUM" ]; then
+              IS_NEW=false
+              echo "HfsPlus.efi already exists with same checksum. Skipping signing."
+            else
+              echo "HfsPlus.efi is different from existing version. Will sign it."
+            fi
+          else
+            echo "HfsPlus.efi not found in existing structure. Will sign it."
+          fi
+          
+          # If new, sign it
+          if [ "$IS_NEW" = true ]; then
+            echo "Signing HfsPlus.efi..."
+            mkdir -p X64/Drivers
+            cp HfsPlus.efi X64/Drivers/
+            cd ..
+            ./sign_local_efi.sh HfsPlus-temp/X64
+            
+            # Copy signed file to both DEBUG and RELEASE
+            mkdir -p OpenCore-DEBUG/X64/Drivers
+            mkdir -p OpenCore-RELEASE/X64/Drivers
+            cp Signed/HfsPlus-temp/X64/Drivers/HfsPlus.efi OpenCore-DEBUG/X64/Drivers/
+            cp Signed/HfsPlus-temp/X64/Drivers/HfsPlus.efi OpenCore-RELEASE/X64/Drivers/
+            rm -rf Signed
+            echo "Signed HfsPlus.efi added to both packages"
+          else
+            cd ..
+            # Copy existing file to maintain consistency
+            mkdir -p OpenCore-DEBUG/X64/Drivers
+            mkdir -p OpenCore-RELEASE/X64/Drivers
+            cp HfsPlus-temp/HfsPlus.efi OpenCore-DEBUG/X64/Drivers/
+            cp HfsPlus-temp/HfsPlus.efi OpenCore-RELEASE/X64/Drivers/
+            echo "Using existing HfsPlus.efi (no signing needed)"
+          fi
+          
+          # Cleanup
+          rm -rf HfsPlus-temp
+
       - name: Repackage
         if: steps.check-release.outputs.exists == 'false'
         run: |
