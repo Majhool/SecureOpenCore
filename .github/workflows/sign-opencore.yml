@@ -126,8 +126,16 @@ jobs:
             # Copy signed file to both DEBUG and RELEASE
             mkdir -p OpenCore-DEBUG/X64/Drivers
             mkdir -p OpenCore-RELEASE/X64/Drivers
+
+            # Copy signed driver into package X64 Drivers
             cp Signed/HfsPlus-temp/X64/Drivers/HfsPlus.efi OpenCore-DEBUG/X64/Drivers/
             cp Signed/HfsPlus-temp/X64/Drivers/HfsPlus.efi OpenCore-RELEASE/X64/Drivers/
+
+            # Also place into package EFI/OC/Drivers so zips contain EFI/OC/Drivers/HfsPlus.efi
+            mkdir -p OpenCore-DEBUG/EFI/OC/Drivers
+            mkdir -p OpenCore-RELEASE/EFI/OC/Drivers
+            cp Signed/HfsPlus-temp/X64/Drivers/HfsPlus.efi OpenCore-DEBUG/EFI/OC/Drivers/HfsPlus.efi
+            cp Signed/HfsPlus-temp/X64/Drivers/HfsPlus.efi OpenCore-RELEASE/EFI/OC/Drivers/HfsPlus.efi
 
             # Also place into repository path for OCAT
             mkdir -p EFI/OC/Drivers
@@ -142,6 +150,12 @@ jobs:
             mkdir -p OpenCore-RELEASE/X64/Drivers
             cp HfsPlus-temp/HfsPlus.efi OpenCore-DEBUG/X64/Drivers/
             cp HfsPlus-temp/HfsPlus.efi OpenCore-RELEASE/X64/Drivers/
+
+            # Also copy into package EFI/OC/Drivers so zips contain EFI/OC/Drivers/HfsPlus.efi
+            mkdir -p OpenCore-DEBUG/EFI/OC/Drivers
+            mkdir -p OpenCore-RELEASE/EFI/OC/Drivers
+            cp HfsPlus-temp/HfsPlus.efi OpenCore-DEBUG/EFI/OC/Drivers/HfsPlus.efi
+            cp HfsPlus-temp/HfsPlus.efi OpenCore-RELEASE/EFI/OC/Drivers/HfsPlus.efi
 
             # Also copy into repository path for OCAT
             mkdir -p EFI/OC/Drivers
