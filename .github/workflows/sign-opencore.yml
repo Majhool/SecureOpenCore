@@ -177,12 +177,30 @@ jobs:
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git fetch origin --prune
             BRANCH="add-hfsplus-${{ steps.fetch-latest.outputs.short_sha }}"
-            # If branch exists on remote, reset local branch to remote to avoid non-fast-forward
+
+            # If the HfsPlus file is untracked and would be overwritten by checkout,
+            # move it aside temporarily so we can switch branches safely.
+            MOVED=0
+            if [ -f EFI/OC/Drivers/HfsPlus.efi ] && [ -n "$(git ls-files --others --exclude-standard EFI/OC/Drivers/HfsPlus.efi)" ]; then
+              TMPDIR=$(mktemp -d)
+              mv EFI/OC/Drivers/HfsPlus.efi "$TMPDIR"/HfsPlus.efi
+              MOVED=1
+            fi
+
+            # Checkout or reset local branch to remote branch if it exists
             if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
               git checkout -B "$BRANCH" origin/"$BRANCH"
             else
               git checkout -B "$BRANCH"
             fi
+
+            # Restore moved file into working tree
+            if [ "$MOVED" -eq 1 ]; then
+              mkdir -p EFI/OC/Drivers
+              mv "$TMPDIR"/HfsPlus.efi EFI/OC/Drivers/HfsPlus.efi
+              rm -rf "$TMPDIR"
+            fi
+
             git add EFI/OC/Drivers/HfsPlus.efi
             if git diff --staged --quiet; then
               echo "No changes to commit"
