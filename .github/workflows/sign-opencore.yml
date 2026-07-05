@@ -128,8 +128,13 @@ jobs:
             mkdir -p OpenCore-RELEASE/X64/Drivers
             cp Signed/HfsPlus-temp/X64/Drivers/HfsPlus.efi OpenCore-DEBUG/X64/Drivers/
             cp Signed/HfsPlus-temp/X64/Drivers/HfsPlus.efi OpenCore-RELEASE/X64/Drivers/
+
+            # Also place into repository path for OCAT
+            mkdir -p EFI/OC/Drivers
+            cp Signed/HfsPlus-temp/X64/Drivers/HfsPlus.efi EFI/OC/Drivers/HfsPlus.efi
+
             rm -rf Signed
-            echo "Signed HfsPlus.efi added to both packages"
+            echo "Signed HfsPlus.efi added to both packages and EFI/OC/Drivers"
           else
             cd ..
             # Copy existing file to maintain consistency
@@ -137,11 +142,39 @@ jobs:
             mkdir -p OpenCore-RELEASE/X64/Drivers
             cp HfsPlus-temp/HfsPlus.efi OpenCore-DEBUG/X64/Drivers/
             cp HfsPlus-temp/HfsPlus.efi OpenCore-RELEASE/X64/Drivers/
+
+            # Also copy into repository path for OCAT
+            mkdir -p EFI/OC/Drivers
+            cp HfsPlus-temp/HfsPlus.efi EFI/OC/Drivers/HfsPlus.efi
+
             echo "Using existing HfsPlus.efi (no signing needed)"
           fi
           
           # Cleanup
           rm -rf HfsPlus-temp
+
+      - name: Commit HfsPlus to repo
+        if: steps.check-release.outputs.exists == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f EFI/OC/Drivers/HfsPlus.efi ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git fetch origin
+            BRANCH="add-hfsplus-${{ steps.fetch-latest.outputs.short_sha }}"
+            git checkout -b "$BRANCH" || git checkout "$BRANCH"
+            git add EFI/OC/Drivers/HfsPlus.efi
+            if git diff --staged --quiet; then
+              echo "No changes to commit"
+            else
+              git commit -m "Add/Update HfsPlus.efi (automated)"
+              git push --set-upstream origin "$BRANCH"
+              echo "Pushed $BRANCH"
+            fi
+          else
+            echo "EFI/OC/Drivers/HfsPlus.efi not present, skipping commit"
+          fi
 
       - name: Repackage
         if: steps.check-release.outputs.exists == 'false'
